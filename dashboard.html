@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Kinerja Produk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .table-scroll::-webkit-scrollbar { height: 8px; }
+        .table-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+        .table-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 8px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen p-4 sm:p-6 lg:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">Kinerja Produk</h1>
+                <p class="text-slate-500 text-sm mt-1">Pilih tanggal untuk melihat pencapaian Harian, Mingguan (Batas Bulan), dan Bulanan.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+                <div class="flex items-center gap-3 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl w-full sm:w-auto">
+                    <label for="filterTanggal" class="text-sm font-semibold text-slate-600 whitespace-nowrap">Filter Waktu:</label>
+                    <input type="date" id="filterTanggal" onchange="prosesData()" class="bg-transparent text-slate-800 font-bold outline-none cursor-pointer">
+                </div>
+                <div class="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2.5 rounded-xl text-sm font-bold border border-blue-100 w-full sm:w-auto justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span id="lastUpdate">Memuat data...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="product-container" class="space-y-8">
+            <div class="text-center py-20 text-slate-400 flex flex-col items-center">
+                <svg class="animate-spin h-10 w-10 mb-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p class="font-medium">Menghubungkan ke server...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- MASUKKAN URL WEB APP APPS SCRIPT ANDA DI SINI ---
+        const scriptURL = 'https://script.google.com/macros/s/AKfycbz78FGxmizakrGRFn4sLEMdovqce11sr32vQKtuE-gHQClCLFp_QO95sg6jnPu0de6e/exec?action=getDashboardData'; 
+        
+        let rawDataGlobal = [];
+        let targetProdukGlobal = {}; 
+        let masterKaryawanGlobal = {}; 
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTanggalFilterHariIni();
+            fetch(scriptURL)
+                .then(res => res.json())
+                .then(data => {
+                    rawDataGlobal = data.input;
+                    targetProdukGlobal = data.target; 
+                    masterKaryawanGlobal = data.karyawan || {}; 
+                    document.getElementById('lastUpdate').innerText = "Live Update";
+                    prosesData(); 
+                })
+                .catch(err => {
+                    document.getElementById('product-container').innerHTML = `<div class="bg-red-50 text-red-600 p-6 rounded-xl border border-red-200 text-center"><h3 class="font-bold text-lg mb-2">Gagal Memuat Data</h3><p>Pastikan URL API benar dan koneksi internet stabil.</p></div>`;
+                });
+        });
+
+        function setTanggalFilterHariIni() {
+            const input = document.getElementById('filterTanggal');
+            const d = new Date();
+            input.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function prosesData() {
+            if (rawDataGlobal.length === 0 && Object.keys(targetProdukGlobal).length === 0) return;
+
+            const dateInput = document.getElementById('filterTanggal').value;
+            if(!dateInput) return;
+            
+            const [year, month, day] = dateInput.split('-');
+            const baseDate = new Date(year, month - 1, day);
+            baseDate.setHours(0,0,0,0);
+
+            const dayOfWeek = baseDate.getDay(); 
+            const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; 
+            
+            const startOfWeek = new Date(baseDate);
+            startOfWeek.setDate(baseDate.getDate() + diffToMonday);
+            startOfWeek.setHours(0,0,0,0);
+
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
+            endOfWeek.setHours(23,59,59,999);
+
+            const firstDayOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+            firstDayOfMonth.setHours(0,0,0,0);
+            const lastDayOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
+            lastDayOfMonth.setHours(23,59,59,999);
+
+            if (startOfWeek < firstDayOfMonth) startOfWeek.setTime(firstDayOfMonth.getTime());
+            if (endOfWeek > lastDayOfMonth) endOfWeek.setTime(lastDayOfMonth.getTime());
+
+            const dataPerProduk = {};
+
+            Object.keys(targetProdukGlobal).forEach(namaProduk => {
+                let initHarian = {};
+                let initBulanan = {};
+                
+                Object.keys(masterKaryawanGlobal).forEach(namaKaryawan => { 
+                    const assigned = masterKaryawanGlobal[namaKaryawan].produkAssign || [];
+                    if (assigned.length === 0 || assigned.includes(namaProduk.toUpperCase())) {
+                        initHarian[namaKaryawan] = 0; 
+                        initBulanan[namaKaryawan] = 0; 
+                    }
+                });
+                
+                dataPerProduk[namaProduk] = { 
+                    perolehanHarian: 0, perolehanMingguan: 0, perolehanBulanan: 0, 
+                    individuHarian: initHarian, individuBulanan: initBulanan 
+                };
+            });
+
+            rawDataGlobal.forEach(row => {
+                const prodName = row.product ? row.product.toUpperCase() : "TIDAK DIKETAHUI";
+                if (!dataPerProduk[prodName]) return; 
+
+                if (!row.tanggal) return;
+                const tglData = new Date(row.tanggal);
+                tglData.setHours(0,0,0,0);
+                const namaKaryawan = row.nama || "Tanpa Nama";
+
+                if (dataPerProduk[prodName].individuHarian[namaKaryawan] === undefined) {
+                    dataPerProduk[prodName].individuHarian[namaKaryawan] = 0;
+                    dataPerProduk[prodName].individuBulanan[namaKaryawan] = 0;
+                }
+
+                if (tglData.getTime() === baseDate.getTime()) {
+                    dataPerProduk[prodName].perolehanHarian++;
+                    dataPerProduk[prodName].individuHarian[namaKaryawan]++;
+                }
+
+                if (tglData.getTime() >= startOfWeek.getTime() && tglData.getTime() <= endOfWeek.getTime()) {
+                    dataPerProduk[prodName].perolehanMingguan++;
+                }
+
+                if (tglData.getMonth() === baseDate.getMonth() && tglData.getFullYear() === baseDate.getFullYear()) {
+                    dataPerProduk[prodName].perolehanBulanan++;
+                    dataPerProduk[prodName].individuBulanan[namaKaryawan]++;
+                }
+            });
+
+            renderDashboard(dataPerProduk, baseDate, startOfWeek, endOfWeek);
+        }
+
+        function renderDashboard(dataGroup, baseDate, startOfWeek, endOfWeek) {
+            const container = document.getElementById('product-container');
+            container.innerHTML = '';
+            
+            const labelHariIni = formatTanggalLabel(baseDate); 
+            const labelBulanIni = formatBulanLabel(baseDate);  
+            const labelMingguIni = formatMingguLabel(startOfWeek, endOfWeek);
+
+            Object.keys(dataGroup).forEach(namaProduk => {
+                const data = dataGroup[namaProduk];
+                const target = targetProdukGlobal[namaProduk] || { daily: 0, weekly: 0, monthly: 0 };
+
+                const pctDaily = target.daily > 0 ? Math.round((data.perolehanHarian / target.daily) * 100) : 0;
+                const pctWeekly = target.weekly > 0 ? Math.round((data.perolehanMingguan / target.weekly) * 100) : 0;
+                const pctMonthly = target.monthly > 0 ? Math.round((data.perolehanBulanan / target.monthly) * 100) : 0;
+
+                const gapDaily = data.perolehanHarian - target.daily;
+                const gapWeekly = data.perolehanMingguan - target.weekly;
+                const gapMonthly = data.perolehanBulanan - target.monthly;
+
+                const arrIndividu = Object.keys(data.individuBulanan).map(nama => {
+                    return { nama: nama, harian: data.individuHarian[nama], bulanan: data.individuBulanan[nama] };
+                }).sort((a, b) => b.bulanan - a.bulanan);
+
+                let htmlIndividu = '';
+                arrIndividu.forEach(indv => {
+                    let isNihil = indv.bulanan === 0;
+                    let classRow = isNihil ? "text-slate-400" : "text-slate-700 font-medium";
+                    let labelHarian = indv.harian === 0 ? `<span class="text-slate-300">-</span>` : `<span class="font-bold text-blue-600">${indv.harian}</span>`;
+                    let labelBulanan = isNihil ? `<span class="bg-red-50 text-red-500 border border-red-100 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wide uppercase">Nihil</span>` : `<span class="font-bold text-slate-800">${indv.bulanan}</span>`;
+                        
+                    htmlIndividu += `
+                    <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 text-sm">
+                        <td class="px-5 py-3.5 ${classRow}">${indv.nama}</td>
+                        <td class="px-5 py-3.5 text-center">${labelHarian}</td>
+                        <td class="px-5 py-3.5 text-center bg-slate-50/50">${labelBulanan}</td>
+                    </tr>`;
+                });
+
+                if(arrIndividu.length === 0) {
+                    htmlIndividu = `<tr><td colspan="3" class="px-5 py-4 text-center text-slate-400 italic">Tidak ada tim yang ditugaskan.</td></tr>`;
+                }
+
+                const gapFormatter = (gapValue) => gapValue < 0 ? `<span class="text-red-600 font-extrabold">${gapValue}</span>` : `<span class="text-emerald-600 font-extrabold">${gapValue}</span>`;
+
+                const htmlCard = `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row transition-shadow hover:shadow-md">
+                    
+                    <div class="md:w-56 bg-gradient-to-br from-blue-800 to-blue-900 text-white p-6 flex flex-col justify-center items-center shrink-0 border-b md:border-b-0 md:border-r border-blue-900/50">
+                        <h3 class="text-2xl font-black tracking-wider text-center drop-shadow-md">${namaProduk}</h3>
+                        <span class="text-sm font-medium text-blue-200 mt-3 bg-blue-900/40 px-3 py-1 rounded-full border border-blue-700/50">${labelHariIni}</span>
+                    </div>
+
+                    <div class="flex-1 overflow-hidden flex flex-col">
+                        
+                        <div class="table-scroll overflow-x-auto w-full border-b border-slate-200">
+                            <table class="w-full text-center border-collapse whitespace-nowrap">
+                                <thead>
+                                    <tr>
+                                        <th colspan="4" class="bg-blue-600 text-white p-2.5 border-b border-r border-blue-700 text-xs font-bold tracking-widest uppercase shadow-sm">Daily</th>
+                                        <th colspan="4" class="bg-blue-600 text-white p-2.5 border-b border-r border-blue-700 text-xs font-bold tracking-widest uppercase shadow-sm">Weekly</th>
+                                        <th colspan="4" class="bg-blue-600 text-white p-2.5 border-b border-blue-700 text-xs font-bold tracking-widest uppercase shadow-sm">Monthly</th>
+                                    </tr>
+                                    <tr class="bg-blue-50 text-blue-800 text-[11px] tracking-wider uppercase font-extrabold">
+                                        <th class="p-2 border-b border-r border-blue-100">${labelHariIni}</th>
+                                        <th class="p-2 border-b border-r border-blue-100">Target</th>
+                                        <th class="p-2 border-b border-r border-blue-100">%</th>
+                                        <th class="p-2 border-b border-r border-blue-100">GAP</th>
+                                        <th class="p-2 border-b border-r border-blue-100">${labelMingguIni}</th>
+                                        <th class="p-2 border-b border-r border-blue-100">Target</th>
+                                        <th class="p-2 border-b border-r border-blue-100">%</th>
+                                        <th class="p-2 border-b border-r border-blue-100">GAP</th>
+                                        <th class="p-2 border-b border-r border-blue-100">${labelBulanIni}</th>
+                                        <th class="p-2 border-b border-r border-blue-100">Target</th>
+                                        <th class="p-2 border-b border-r border-blue-100">%</th>
+                                        <th class="p-2 border-b border-blue-100">GAP</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-slate-700 text-sm">
+                                    <tr class="bg-white">
+                                        <td class="bg-red-50 text-red-700 font-black p-3.5 border-r border-slate-200 text-base shadow-inner">${data.perolehanHarian > 0 ? data.perolehanHarian : ''}</td>
+                                        <td class="p-3.5 border-r border-slate-200 font-semibold text-slate-500">${target.daily}</td>
+                                        <td class="p-3.5 border-r border-slate-200 font-bold">${pctDaily}%</td>
+                                        <td class="p-3.5 border-r border-slate-200 bg-slate-50/50">${gapFormatter(gapDaily)}</td>
+                                        <td class="bg-red-50 text-red-700 font-black p-3.5 border-r border-slate-200 text-base shadow-inner">${data.perolehanMingguan > 0 ? data.perolehanMingguan : '-'}</td>
+                                        <td class="p-3.5 border-r border-slate-200 font-semibold text-slate-500">${target.weekly}</td>
+                                        <td class="p-3.5 border-r border-slate-200 font-bold">${pctWeekly}%</td>
+                                        <td class="p-3.5 border-r border-slate-200 bg-slate-50/50">${gapFormatter(gapWeekly)}</td>
+                                        <td class="bg-red-50 text-red-700 font-black p-3.5 border-r border-slate-200 text-base shadow-inner">${data.perolehanBulanan > 0 ? data.perolehanBulanan : '-'}</td>
+                                        <td class="p-3.5 border-r border-slate-200 font-semibold text-slate-500">${target.monthly}</td>
+                                        <td class="p-3.5 border-r border-slate-200 font-bold">${pctMonthly}%</td>
+                                        <td class="p-3.5 bg-slate-50/50">${gapFormatter(gapMonthly)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="p-5 sm:p-6 bg-slate-50/30">
+                            <div class="flex items-center gap-2 mb-4 text-slate-700">
+                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                <h4 class="font-bold text-sm tracking-wide">Tim Penanggung Jawab</h4>
+                            </div>
+                            
+                            <div class="overflow-x-auto">
+                                <table class="w-full max-w-2xl text-left border border-slate-200 bg-white rounded-xl shadow-sm overflow-hidden">
+                                    <thead class="bg-slate-100 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
+                                        <tr>
+                                            <th class="px-5 py-3.5 border-b border-slate-200">Nama Karyawan</th>
+                                            <th class="px-5 py-3.5 border-b border-slate-200 text-center w-32 border-l border-slate-200">Total Harian</th>
+                                            <th class="px-5 py-3.5 border-b border-slate-200 text-center w-32 border-l border-slate-200 bg-slate-200/50">Total Bulanan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${htmlIndividu}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                `;
+                container.insertAdjacentHTML('beforeend', htmlCard);
+            });
+        }
+
+        const bulanSingkat = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        function formatTanggalLabel(date) { return `${String(date.getDate()).padStart(2, '0')}-${bulanSingkat[date.getMonth()]}-${String(date.getFullYear()).slice(-2)}`; }
+        function formatBulanLabel(date) { return `${bulanSingkat[date.getMonth()]}-${String(date.getFullYear()).slice(-2)}`; }
+        function formatMingguLabel(start, end) { return `${String(start.getDate()).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')} ${bulanSingkat[start.getMonth()]}`; }
+    </script>
+</body>
+</html>
